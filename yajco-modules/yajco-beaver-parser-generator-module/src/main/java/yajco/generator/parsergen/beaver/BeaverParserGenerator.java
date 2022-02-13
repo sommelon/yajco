@@ -267,6 +267,10 @@ public class BeaverParserGenerator {
                 return parserPackageName + ".SymbolUnorderedParam";
             } else if (type instanceof OptionalType) {
                 return "java.util.Optional<" + innerTypeString + ">";
+            } else if (type instanceof ListTypeWithShared) {
+                return parserPackageName + ".SymbolListImplWithShared<" + innerTypeString + ">";
+            } else if (type instanceof OrderedSetType) {
+                return parserPackageName + ".SymbolLinkedHashSetImpl<" + innerTypeString + ">";
             } else {
                 throw new IllegalArgumentException("Unknown component type detected: '" + type.getClass().getCanonicalName() + "'!");
             }
