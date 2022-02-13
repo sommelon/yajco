@@ -24,6 +24,7 @@ public class Antlr4CompilerGenerator implements CompilerGenerator {
     static final private String ANTLR4_PARSER_CLASS_TEMPLATE = "/yajco/generator/parsergen/antlr4/templates/Parser.java.vm";
     static final private String ANTLR4_LEXER_CLASS_TEMPLATE = "/yajco/generator/parsergen/antlr4/templates/Lexer.java.vm";
     static final private String ANTLR4_PARSE_EXCEPTION_CLASS_TEMPLATE = "/yajco/generator/parsergen/antlr4/templates/ParseException.java.vm";
+    static final private String LINKED_HASH_SET_IMPL_CLASS_TEMPLATE = "/yajco/generator/parsergen/antlr4/templates/LinkedHashSetImplClass.java.vm";
     private VelocityEngine velocityEngine;
 
     // TODO: Remove this hack later.
@@ -62,9 +63,16 @@ public class Antlr4CompilerGenerator implements CompilerGenerator {
             final String ANTLRParserPackageName = parserPackageName + ".antlr4";
             final String ANTLRParserClassName = parserClassName + "Parser";
             final String ANTLRLexerClassName = parserClassName + "Lexer";
+            final String utilsPackageName = ANTLRParserPackageName + ".util";
+            final String linkedHashSetImplClassTemplateName = utilsPackageName + ".LinkedHashSetImpl";
 
             final String grammarName = parserClassName;
             final String grammarFileName = grammarName + ".g4";
+
+            // Create utility classes
+            try (Writer writer = filer.createSourceFile(linkedHashSetImplClassTemplateName).openWriter()) {
+                writer.write(generateLinkedHasSetImplClass(utilsPackageName));
+            }
 
             ModelTranslator translator = new ModelTranslator(language, grammarName, ANTLRParserPackageName);
 
@@ -147,6 +155,16 @@ public class Antlr4CompilerGenerator implements CompilerGenerator {
             e.printStackTrace();
             throw new RuntimeException("ANTLR4 Compiler Generator reports an error: " + e.getMessage());
         }
+    }
+
+    private String generateLinkedHasSetImplClass(String utilsPackageName) throws IOException {
+        VelocityContext context = new VelocityContext();
+        context.put("utilsPackageName", utilsPackageName);
+
+        StringWriter writer = new StringWriter();
+        this.velocityEngine.evaluate(context, writer, "",
+            new InputStreamReader(getClass().getResourceAsStream(LINKED_HASH_SET_IMPL_CLASS_TEMPLATE)));
+        return writer.toString();
     }
 
     private String generateParserWrapper(String ANTLRParserFullClassName, String ANTLRLexerFullClassName,

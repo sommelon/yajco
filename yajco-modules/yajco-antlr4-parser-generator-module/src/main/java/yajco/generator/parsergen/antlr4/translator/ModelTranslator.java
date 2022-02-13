@@ -111,9 +111,13 @@ public class ModelTranslator {
             implicitTokens.add(entry.getKey());
         }
 
+        String header = "package " + this.parserPackageName + ";\n\n" +
+                        "import " + this.parserPackageName + ".util.*;\n" +
+            "import java.util.*;";
+
         return new Grammar(
                 this.parserClassName,
-                "package " + this.parserPackageName + ";",
+                header,
                 implicitTokens,
                 parserRules,
                 lexicalRules);
@@ -442,7 +446,14 @@ public class ModelTranslator {
                             if (type instanceof ArrayType) {
                                 action.append(".toArray(" + typeString + "::new);");
                             } else if (type instanceof ListType) {
-                                action.append(".collect(java.util.stream.Collectors.toList());");
+                                UniqueValues uniqueValuesPattern = bindingNotationPart.getPattern(UniqueValues.class);
+
+                                if (uniqueValuesPattern != null) {
+//                                    p.returns = "java.util.List<" + innerTypeString + "> " + RETURN_VAR_NAME;
+                                    action.append(".collect(java.util.stream.Collectors.toCollection(LinkedHashSetImpl::new)).stream().collect(java.util.stream.Collectors.toCollection(ArrayList::new));"); //TODO urobit pre ArrayType a primitive
+                                } else {
+                                    action.append(".collect(java.util.stream.Collectors.toList());");
+                                }
                             } else if (type instanceof SetType) {
                                 action.append(".collect(java.util.stream.Collectors.toSet());");
                             } else {

@@ -1,0 +1,14 @@
+package $utilsPackageName;
+
+import java.util.LinkedHashSet;
+
+public class LinkedHashSetImpl<T> extends LinkedHashSet<T> {
+    @Override
+    public boolean add(T t) {
+        boolean successful = super.add(t);
+        if (successful) {
+            return true;
+        }
+        throw new RuntimeException("Parse error. Found not unique object: " + t);
+    }
+}
