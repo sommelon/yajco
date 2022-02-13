@@ -7,6 +7,7 @@ import yajco.generator.parsergen.antlr4.model.*;
 import yajco.generator.util.RegexUtil;
 import yajco.generator.util.Utilities;
 import yajco.model.*;
+import yajco.model.pattern.Pattern;
 import yajco.model.pattern.impl.*;
 import yajco.model.pattern.impl.Enum;
 import yajco.model.type.*;
@@ -363,7 +364,16 @@ public class ModelTranslator {
 
                         RulePart rulePart = new RulePart(ruleName);
                         rulePart.setLabel(labelProvider.createLabel(ruleName));
-                        params.add(String.format(conversionExpr, "$ctx." + rulePart.getLabel() + ".getText()"));
+                        StringBuilder param = new StringBuilder(String.format(conversionExpr, "$ctx." + rulePart.getLabel() + ".getText()"));
+                        if (bindingNotationPart instanceof PropertyReferencePart) {
+                            for (Pattern pattern : bindingNotationPart.getPatterns()) { //TODO: getProperty
+                                if (pattern.getClass().equals(QuotedString.class)) {
+                                    param.insert(0, "UnquoteStringUtil.unquote(").append(")");
+                                    break;
+                                }
+                            }
+                        }
+                        params.add(param.toString());
                         parts.add(rulePart);
                     } else if (type instanceof ComponentType) {
                         ComponentType componentType = (ComponentType) type;
