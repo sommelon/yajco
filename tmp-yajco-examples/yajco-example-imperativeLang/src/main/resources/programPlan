@@ -1,0 +1,15 @@
+class Main {
+    // Unordered parameters (class attributes)??? not really...
+    int num1, num2; // Shared concept
+    static String state = "start"; // StringToken
+
+    main(String[] args) {
+        num1 = 1;
+        num2 = 2;
+        int temp = num2;
+        num2 = num1;
+        num1 = temp;
+        state = "end"
+        return; // Optional in void
+    }
+}

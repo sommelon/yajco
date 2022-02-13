@@ -51,6 +51,7 @@
         <module>yajco-modules</module>
         <module>yajco-parser</module>
         <module>yajco-prototype-modules</module>
+        <module>tmp-yajco-examples</module>
     </modules>
 
     <dependencyManagement>
@@ -92,8 +93,8 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.0</version>
                     <configuration>
-                        <source>1.8</source>
-                        <target>1.8</target>
+                        <source>11</source>
+                        <target>11</target>
                         <proc>none</proc>
                     </configuration>
                 </plugin>
