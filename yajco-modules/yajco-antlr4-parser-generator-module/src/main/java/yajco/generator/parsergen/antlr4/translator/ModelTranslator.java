@@ -37,6 +37,14 @@ public class ModelTranslator {
     private static class Alternative {
         Operator op;
         SequencePart sequence;
+
+        @Override
+        public String toString() {
+            return "Alternative{" +
+                "op=" + op +
+                ", sequence=" + sequence +
+                '}';
+        }
     }
 
     private final Map<String, Production> productions = new LinkedHashMap<>();
@@ -68,6 +76,7 @@ public class ModelTranslator {
         // Process concepts starting from top-level ones.
         for (Concept c : this.language.getConcepts()) {
             if (c.getParent() == null) {
+                System.out.println("PROCESSING CONCEPTS");
                 processTopLevelConcept(c);
             }
         }
@@ -75,6 +84,7 @@ public class ModelTranslator {
         // In an IS-A relationship, we merge all subconcept rules into top-level rules to prevent potential indirect
         // left recursion. However, sometimes the subconcept is also in a HAS-A relationship with another concept and
         // then we need to create a new production rule for it.
+        System.out.println("PROCESSING SUBCONCEPTS");
         for (Concept c : this.language.getConcepts()) {
             for (Notation n : c.getConcreteSyntax()) {
                 for (NotationPart part : n.getParts()) {
@@ -94,6 +104,7 @@ public class ModelTranslator {
                         if (referenceType != null) {
                             if (!this.productions.containsKey(
                                     convertProductionName(referenceType.getConcept().getConceptName()))) {
+                                System.out.println("PROCESSING HAS A: " + referenceType.getConcept().getConceptName());
                                 processTopLevelConcept(referenceType.getConcept());
                             }
                         }
@@ -113,8 +124,7 @@ public class ModelTranslator {
         }
 
         String header = "package " + this.parserPackageName + ";\n\n" +
-                        "import " + this.parserPackageName + ".util.*;\n" +
-            "import java.util.*;";
+                        "import " + this.parserPackageName + ".util.*;";
 
         return new Grammar(
                 this.parserClassName,
@@ -177,11 +187,14 @@ public class ModelTranslator {
         while (!conceptsToVisit.isEmpty()) {
             Concept c = conceptsToVisit.pop();
             List<Concept> subConcepts = getDirectSubconcepts(c);
+            System.out.println("VISITING "+ c.getConceptName());
             if (!isConceptAbstract(c)) {
+                System.out.println(c.getConceptName() + " HAS CONCRETE OR ABSTRACT SYNTAX");
                 unresolvedAlts.addAll(processConcreteConcept(c));
             }
             Collections.reverse(subConcepts);
             for (Concept subConcept : subConcepts) {
+                System.out.println("Concept " + concept.getConceptName() + " HAS SUBCONCEPT " + subConcept.getConceptName());
                 conceptsToVisit.push(subConcept);
             }
         }
@@ -191,6 +204,7 @@ public class ModelTranslator {
                 .filter(alt -> alt.op != null)
                 .sorted(Comparator.comparingInt((Alternative alt) -> alt.op.getPriority()).reversed())
                 .collect(Collectors.groupingBy(alt -> alt.op.getPriority(), LinkedHashMap::new, Collectors.toList()));
+        System.out.println("CONCEPT " + concept.getConceptName() + "HAS UNRESOLVED ALTS: " + unresolvedAlts.stream().map(Object::toString).collect(Collectors.joining(", ")));
 
         // Merge alternatives with the same priority.
         List<Alternative> operatorAlts = operatorGroups.entrySet().stream()
@@ -366,7 +380,7 @@ public class ModelTranslator {
                         rulePart.setLabel(labelProvider.createLabel(ruleName));
                         StringBuilder param = new StringBuilder(String.format(conversionExpr, "$ctx." + rulePart.getLabel() + ".getText()"));
                         if (bindingNotationPart instanceof PropertyReferencePart) {
-                            for (Pattern pattern : bindingNotationPart.getPatterns()) { //TODO: getProperty
+                            for (Pattern pattern : bindingNotationPart.getPatterns()) { // nefunguje bindingNotationPart.getPattern(QuotedString.class)
                                 if (pattern.getClass().equals(QuotedString.class)) {
                                     param.insert(0, "UnquoteStringUtil.unquote(").append(")");
                                     break;
@@ -443,6 +457,8 @@ public class ModelTranslator {
                                 (!(innerType instanceof PrimitiveType)
                                     || ((PrimitiveType) innerType).getPrimitiveTypeConst() == PrimitiveTypeConst.STRING);
 
+                        UniqueValues uniqueValuesPattern = bindingNotationPart.getPattern(UniqueValues.class);
+
                         if (useStream) {
                             action.append("$").append(RETURN_VAR_NAME).append(" = $ctx.").append(ruleName)
                                     .append("().stream().map(elem -> ");
@@ -453,17 +469,13 @@ public class ModelTranslator {
                                 action.append("elem.").append(RETURN_VAR_NAME);
                             }
                             action.append(")");
+                            if (uniqueValuesPattern != null) {
+                                action.append(".collect(java.util.stream.Collectors.toCollection(LinkedHashSetImpl::new)).stream()");
+                            }
                             if (type instanceof ArrayType) {
                                 action.append(".toArray(" + typeString + "::new);");
                             } else if (type instanceof ListType) {
-                                UniqueValues uniqueValuesPattern = bindingNotationPart.getPattern(UniqueValues.class);
-
-                                if (uniqueValuesPattern != null) {
-//                                    p.returns = "java.util.List<" + innerTypeString + "> " + RETURN_VAR_NAME;
-                                    action.append(".collect(java.util.stream.Collectors.toCollection(LinkedHashSetImpl::new)).stream().collect(java.util.stream.Collectors.toCollection(ArrayList::new));"); //TODO urobit pre ArrayType a primitive
-                                } else {
-                                    action.append(".collect(java.util.stream.Collectors.toList());");
-                                }
+                                action.append(".collect(java.util.stream.Collectors.toList());");
                             } else if (type instanceof SetType) {
                                 action.append(".collect(java.util.stream.Collectors.toSet());");
                             } else {
@@ -478,7 +490,11 @@ public class ModelTranslator {
                             action.append("java.util.List<").append(boxedTypeString).append("> boxedList = ")
                                     .append("$ctx.").append(ruleName).append("().stream().map(elem -> ")
                                     .append(String.format(conversionExpr, "elem.getSymbol().getText()"))
-                                    .append(").collect(java.util.stream.Collectors.toList());\n");
+                                    .append(")");
+                            if (uniqueValuesPattern != null) {
+                                action.append(".collect(java.util.stream.Collectors.toCollection(LinkedHashSetImpl::new)).stream()");
+                            }
+                            action.append(".collect(java.util.stream.Collectors.toList());\n");
                             action.append("$").append(RETURN_VAR_NAME).append(" = new ")
                                     .append(innerTypeString).append("[boxedList.size()];\n");
                             action.append("for (int i = 0; i < boxedList.size(); i++) {\n    ")
@@ -555,7 +571,8 @@ public class ModelTranslator {
             alt.sequence.setCodeAfter(action.toString());
             alts.add(alt);
         }
-
+        List<String> altsStr = alts.stream().map((e) -> "S: " + e.sequence + " O: " + e.op).collect(Collectors.toList());
+        System.out.println("PROCESSED CONCEPT " + concept.getConceptName() + ": " + String.join(",", altsStr));
         return alts;
     }
 
@@ -730,6 +747,8 @@ public class ModelTranslator {
             return "java.util.List<" + typeToString(componentType.getComponentType()) + ">";
         } else if (componentType instanceof SetType) {
             return "java.util.Set<" + typeToString(componentType.getComponentType()) + ">";
+        } else if (componentType instanceof OptionalType) {
+            return "java.util.Optional<" + typeToString(componentType.getComponentType()) + ">";
         } else {
             throw new IllegalArgumentException("Unknown component type detected: '" + componentType.getClass().getCanonicalName() + "'!");
         }

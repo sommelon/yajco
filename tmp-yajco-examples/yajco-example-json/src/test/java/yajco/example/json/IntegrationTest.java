@@ -35,7 +35,7 @@ public class IntegrationTest {
         String expectedMessage = "Parse error. Found not unique object: \"age\": 5";
         String actualMessage = e.getMessage();
 
-        Assert.assertEquals(actualMessage, expectedMessage);
+        Assert.assertEquals(expectedMessage, actualMessage);
     }
 
     private JsonObject getParsedJsonObject(String input) throws Exception {
