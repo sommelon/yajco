@@ -88,9 +88,10 @@ public class Antlr4CompilerGenerator implements CompilerGenerator {
                 Grammar grammar = translator.translate();
                 System.out.println("\nGenerated ANTLR4 grammar:");
                 System.out.println("--------------------------------------------------------------------------------------------------------");
-                System.out.println(grammar.generate());
+                String generatedGrammar = grammar.generate();
+                System.out.println(generatedGrammar);
                 System.out.println("--------------------------------------------------------------------------------------------------------");
-                writer.write(grammar.generate());
+                writer.write(generatedGrammar);
             }
 
             URI grammarURI = fileObject.toUri();

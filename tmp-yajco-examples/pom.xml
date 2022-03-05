@@ -21,6 +21,5 @@
         <module>yajco-example-deskNielsen</module>
         <module>yajco-example-json</module>
         <module>yajco-example-imperativeLang</module>
-        <module>yajco-example-javaLikeLang</module>
     </modules>
 </project>
