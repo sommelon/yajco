@@ -28,7 +28,7 @@ public class IntegrationTest {
 
     @Test
     public void simpleExampleCodeTest() throws Exception {
-        String input = "print x + y + 3 + 2 where x = 1, y = 2";
+        String input = "print 1 + 2 + 3 + 2";
         Assert.assertEquals("PUSH 2\n" +
                 "PUSH 3\n" +
                 "PUSH 2\n" +
@@ -39,11 +39,13 @@ public class IntegrationTest {
                 getProgramCode(input));
     }
 
-//    @Test
+    @Test
     public void simpleExamplePrinterOutputTest() throws Exception {
-        String input = "print x + y + 3 + 2 where x = 1, y = 2";
+        String input = "print 1 + 2 + 3 + 2";
         getPrinterOutput(input);
-        Assert.assertEquals("print(((( x) +( y)) +( 3)) +( 2)) where x = 1, y = 2\n", outContent.toString());
+        String expected = "print(((( 1) +( 2)) +( 3)) +( 2))\n";
+        expected = expected.replaceAll("\\n|\\r\\n", System.getProperty("line.separator"));
+        Assert.assertEquals(expected, outContent.toString());
     }
 
     @Test
@@ -61,11 +63,13 @@ public class IntegrationTest {
                 getProgramCode(input));
     }
 
-//    @Test
+    @Test
     public void complexExamplePrinterOutputTest() throws Exception {
         String input = "print x + 15 + y + 25 + z where x = 18, y = 32, z = 34";
         getPrinterOutput(input);
-        Assert.assertEquals("print((((( x) +( 15)) +( y)) +( 25)) +( z)) where x = 18, y = 32, z = 34\n", outContent.toString());
+        String expected = "print((((( x) +( 15)) +( y)) +( 25)) +( z)) where x = 18, y = 32, z = 34\n";
+        expected = expected.replaceAll("\\n|\\r\\n", System.getProperty("line.separator"));
+        Assert.assertEquals(expected, outContent.toString());
     }
 
     private String getProgramCode(String input) throws Exception {

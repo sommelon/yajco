@@ -7,8 +7,9 @@ import yajco.example.desk.parser.DeskParser;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        String expr = "print x + y + 3 + 2 where x = 1, y = 2";
-        //String expr = "print (52)";
+//        String expr = "print x + y + 3 + 2 where x = 1, y = 2";
+        String expr = "print 1 + 2 + 3 + 2";
+//        String expr = "print (52)";
 
         Program program ;
         program = new DeskParser().parse(expr);
