@@ -68,6 +68,13 @@ public class ModelTranslator {
                     if (part instanceof TokenPart) {
                         String tokenName = ((TokenPart) part).getToken();
                         this.tokens.putIfAbsent(convertTokenName(tokenName), Utilities.encodeStringIntoRegex(tokenName));
+                    } else if (part instanceof CompoundNotationPart) {
+                        for (NotationPart notationPart : ((CompoundNotationPart) part).getParts()) {
+                            if (notationPart instanceof TokenPart) {
+                                String tokenName = ((TokenPart) notationPart).getToken();
+                                this.tokens.putIfAbsent(convertTokenName(tokenName), Utilities.encodeStringIntoRegex(tokenName));
+                            }
+                        }
                     }
                 }
             }
@@ -333,186 +340,15 @@ public class ModelTranslator {
             List<String> params = new ArrayList<>();
 
             for (NotationPart part : n.getParts()) {
-                if (part instanceof TokenPart) {
-                    String tokenName = ((TokenPart) part).getToken();
-                    parts.add(new RulePart(convertTokenName(tokenName)));
-                } else if (part instanceof BindingNotationPart) {
-                    BindingNotationPart bindingNotationPart = (BindingNotationPart) part;
-                    Type type;
-                    if (bindingNotationPart instanceof PropertyReferencePart) {
-                        type = ((PropertyReferencePart) bindingNotationPart).getProperty().getType();
-                    } else {
-                        type = ((LocalVariablePart) bindingNotationPart).getType();
-                        if (!(type instanceof PrimitiveType)) {
-                            throw new GeneratorException("Referring type must be primitive!");
-                        }
+                if (part instanceof OptionalPart) {
+                    List<Part> compoundParts = new ArrayList<>();
+                    for (NotationPart notationPart : ((OptionalPart) part).getParts()) {
+                        processNotationPart(compoundParts, labelProvider, params, notationPart);
                     }
-                    String typeString = typeToString(type);
-
-                    if (type instanceof ReferenceType) {
-                        ReferenceType referenceType = (ReferenceType) type;
-                        String ruleName = convertProductionName(referenceType.getConcept().getConceptName());
-
-                        RulePart rulePart = new RulePart(ruleName);
-                        rulePart.setLabel(labelProvider.createLabel(ruleName));
-                        params.add("$ctx." + rulePart.getLabel() + "." + RETURN_VAR_NAME);
-                        parts.add(rulePart);
-                    } else if (type instanceof PrimitiveType) {
-                        if (!conversions.containsConversion(typeString)) {
-                            throw new GeneratorException("Cannot handle type " + typeString);
-                        }
-
-                        String conversionExpr = conversions.getConversion(typeString).trim();
-
-                        String ruleName;
-                        Token tokenPattern = (Token) bindingNotationPart.getPattern(Token.class);
-                        if (tokenPattern != null) {
-                            ruleName = convertTokenName(tokenPattern.getName());
-                        } else {
-                            if (bindingNotationPart instanceof PropertyReferencePart) {
-                                ruleName = convertTokenName(((PropertyReferencePart) bindingNotationPart).getProperty().getName());
-                            } else {
-                                ruleName = convertTokenName(((LocalVariablePart) bindingNotationPart).getName());
-                            }
-                        }
-
-                        RulePart rulePart = new RulePart(ruleName);
-                        rulePart.setLabel(labelProvider.createLabel(ruleName));
-                        StringBuilder param = new StringBuilder(String.format(conversionExpr, "$ctx." + rulePart.getLabel() + ".getText()"));
-                        if (bindingNotationPart instanceof PropertyReferencePart) {
-                            for (Pattern pattern : bindingNotationPart.getPatterns()) { // nefunguje bindingNotationPart.getPattern(QuotedString.class)
-                                if (pattern.getClass().equals(QuotedString.class)) {
-                                    param.insert(0, "UnquoteStringUtil.unquote(").append(")");
-                                    break;
-                                }
-                            }
-                        }
-                        params.add(param.toString());
-                        parts.add(rulePart);
-                    } else if (type instanceof ComponentType) {
-                        ComponentType componentType = (ComponentType) type;
-                        Type innerType = componentType.getComponentType();
-                        String innerTypeString = typeToString(innerType);
-
-                        String ruleName; // Name of the terminal/non-terminal pertaining to the list's element.
-                        String productionName; // Name of the production rule to be created.
-
-                        if (innerType instanceof ReferenceType) {
-                            ruleName = convertProductionName(((ReferenceType) innerType).getConcept().getConceptName());
-                            productionName = ruleName + "_list";
-                        } else if (innerType instanceof PrimitiveType) {
-                            if (!conversions.containsConversion(innerTypeString)) {
-                                throw new GeneratorException("Cannot handle type " + innerTypeString + " in " + typeString);
-                            }
-
-                            Token tokenPattern = (Token) bindingNotationPart.getPattern(Token.class);
-                            if (tokenPattern != null) {
-                                ruleName = convertTokenName(tokenPattern.getName());
-                            } else {
-                                if (bindingNotationPart instanceof PropertyReferencePart) {
-                                    ruleName = convertTokenName(((PropertyReferencePart) bindingNotationPart).getProperty().getName());
-                                } else {
-                                    ruleName = convertTokenName(((LocalVariablePart) bindingNotationPart).getName());
-                                }
-                            }
-                            // Token ruleName will be in all caps and a parser rule can't begin with a capital letter
-                            // so prefix it with "nt_".
-                            productionName = "nt_" + ruleName + "_list";
-                        } else if (innerType instanceof ComponentType) {
-                            throw new GeneratorException("Component types of component types are not supported.");
-                        } else {
-                            throw new GeneratorException("Unknown type.");
-                        }
-
-                        while (this.productions.containsKey(productionName)) {
-                            productionName = productionName + "_";
-                        }
-
-                        Production p = new Production();
-                        p.returns = typeString + " " + RETURN_VAR_NAME;
-                        p.alternatives = new ArrayList<>();
-
-                        Alternative alt = new Alternative();
-                        Range range = (Range) bindingNotationPart.getPattern(Range.class);
-                        if (range == null) {
-                            range = new Range();
-                        }
-
-                        Separator separator = (Separator) bindingNotationPart.getPattern(Separator.class);
-                        String sepToken = "";
-                        if (separator != null) {
-                            if (this.language.getToken(separator.getValue()) != null) {
-                                sepToken = convertTokenName(separator.getValue());
-                            } else {
-                                sepToken = addToken(separator.getValue(), Utilities.encodeStringIntoRegex(separator.getValue()));
-                            }
-                        }
-
-                        alt.sequence = generateListGrammar(ruleName, range, sepToken);
-
-                        StringBuilder action = new StringBuilder();
-
-                        // Streams of primitive types are not possible in Java. :-(
-                        boolean useStream =
-                                (!(innerType instanceof PrimitiveType)
-                                    || ((PrimitiveType) innerType).getPrimitiveTypeConst() == PrimitiveTypeConst.STRING);
-
-                        UniqueValues uniqueValuesPattern = bindingNotationPart.getPattern(UniqueValues.class);
-
-                        if (useStream) {
-                            action.append("$").append(RETURN_VAR_NAME).append(" = $ctx.").append(ruleName)
-                                    .append("().stream().map(elem -> ");
-                            if (innerType instanceof PrimitiveType) {
-                                String conversionExpr = conversions.getConversion(innerTypeString);
-                                action.append(String.format(conversionExpr, "elem.getSymbol().getText()"));
-                            } else {
-                                action.append("elem.").append(RETURN_VAR_NAME);
-                            }
-                            action.append(")");
-                            if (uniqueValuesPattern != null) {
-                                action.append(".collect(java.util.stream.Collectors.toCollection(LinkedHashSetImpl::new)).stream()");
-                            }
-                            if (type instanceof ArrayType) {
-                                action.append(".toArray(" + typeString + "::new);");
-                            } else if (type instanceof ListType) {
-                                action.append(".collect(java.util.stream.Collectors.toList());");
-                            } else if (type instanceof SetType) {
-                                action.append(".collect(java.util.stream.Collectors.toSet());");
-                            } else {
-                                throw new GeneratorException("Unknown component type");
-                            }
-                        } else {
-                            assert type instanceof ArrayType;
-
-                            String conversionExpr = conversions.getConversion(innerTypeString);
-
-                            String boxedTypeString = primitiveTypeToBoxedTypeString((PrimitiveType) innerType);
-                            action.append("java.util.List<").append(boxedTypeString).append("> boxedList = ")
-                                    .append("$ctx.").append(ruleName).append("().stream().map(elem -> ")
-                                    .append(String.format(conversionExpr, "elem.getSymbol().getText()"))
-                                    .append(")");
-                            if (uniqueValuesPattern != null) {
-                                action.append(".collect(java.util.stream.Collectors.toCollection(LinkedHashSetImpl::new)).stream()");
-                            }
-                            action.append(".collect(java.util.stream.Collectors.toList());\n");
-                            action.append("$").append(RETURN_VAR_NAME).append(" = new ")
-                                    .append(innerTypeString).append("[boxedList.size()];\n");
-                            action.append("for (int i = 0; i < boxedList.size(); i++) {\n    ")
-                                    .append("$").append(RETURN_VAR_NAME).append("[i] = boxedList.get(i);\n}");
-                        }
-
-                        alt.sequence.setCodeAfter(action.toString());
-
-                        p.alternatives.add(alt);
-                        this.productions.put(productionName, p);
-
-                        RulePart rulePart = new RulePart(productionName);
-                        rulePart.setLabel(labelProvider.createLabel(productionName));
-                        params.add("$ctx." + rulePart.getLabel() + "." + RETURN_VAR_NAME);
-                        parts.add(rulePart);
-                    }
+                    parts.add(new ZeroOrOnePart(new SequencePart(compoundParts)));
+                } else {
+                    processNotationPart(parts, labelProvider, params, part);
                 }
-
             }
 
             Alternative alt = new Alternative();
@@ -574,6 +410,297 @@ public class ModelTranslator {
         List<String> altsStr = alts.stream().map((e) -> "S: " + e.sequence + " O: " + e.op).collect(Collectors.toList());
         System.out.println("PROCESSED CONCEPT " + concept.getConceptName() + ": " + String.join(",", altsStr));
         return alts;
+    }
+
+    private void processNotationPart(List<Part> parts, LabelProvider labelProvider, List<String> params, NotationPart part) {
+        if (part instanceof TokenPart) {
+            processTokenPart(parts, (TokenPart) part);
+        } else if (part instanceof BindingNotationPart) {
+            processBindingNotationPart(parts, labelProvider, params, (BindingNotationPart) part);
+        }
+    }
+
+    private void processBindingNotationPart(List<Part> parts, LabelProvider labelProvider, List<String> params, BindingNotationPart bindingNotationPart) {
+        Type type;
+        if (bindingNotationPart instanceof PropertyReferencePart) {
+            type = ((PropertyReferencePart) bindingNotationPart).getProperty().getType();
+        } else {
+            type = ((LocalVariablePart) bindingNotationPart).getType();
+            if (!(type instanceof PrimitiveType)) {
+                throw new GeneratorException("Referring type must be primitive!");
+            }
+        }
+
+        processTypes(parts, labelProvider, params, bindingNotationPart, type);
+    }
+
+    private void processTypes(List<Part> parts, LabelProvider labelProvider, List<String> params, BindingNotationPart bindingNotationPart, Type type) {
+        if (type instanceof ReferenceType) {
+            processReferenceType(parts, labelProvider, params, (ReferenceType) type);
+        } else if (type instanceof PrimitiveType) {
+            processPrimitiveType(parts, labelProvider, params, bindingNotationPart, (PrimitiveType) type);
+        } else if (type instanceof OptionalType) {
+            Type innerType = ((OptionalType) type).getComponentType();
+            processTypes(parts, labelProvider, params, bindingNotationPart, innerType);
+
+            String lastParam = params.get(params.size() - 1);
+            Part lastPart = parts.get(parts.size() - 1);
+            if (lastPart instanceof RulePart) {
+                String optionalParam = "$ctx." + lastPart.getLabel() +" != null ? " + "java.util.Optional.of(" + lastParam + ") : java.util.Optional.empty()";
+                params.set(params.size() - 1, optionalParam);
+            }
+        } else if (type instanceof ComponentType) {
+            processComponentType(parts, labelProvider, params, bindingNotationPart, (ComponentType) type);
+        }
+    }
+
+    private void processComponentType(List<Part> parts, LabelProvider labelProvider, List<String> params, BindingNotationPart bindingNotationPart, ComponentType type) {
+        Type innerType = type.getComponentType();
+        String typeString = typeToString(type);
+        String innerTypeString = typeToString(innerType);
+
+        String ruleName = getRuleName(type, bindingNotationPart);
+        String productionName = getProductionName(type, bindingNotationPart, ruleName);
+
+        while (this.productions.containsKey(productionName)) {
+            productionName = productionName + "_";
+        }
+
+        Production p = new Production();
+        p.returns = typeString + " " + RETURN_VAR_NAME;
+        p.alternatives = new ArrayList<>();
+
+        Alternative alt = new Alternative();
+        Range range = (Range) bindingNotationPart.getPattern(Range.class);
+        if (range == null) {
+            range = new Range();
+        }
+
+        Separator separator = (Separator) bindingNotationPart.getPattern(Separator.class);
+        String sepToken = "";
+        if (separator != null) {
+            if (this.language.getToken(separator.getValue()) != null) {
+                sepToken = convertTokenName(separator.getValue());
+            } else {
+                sepToken = addToken(separator.getValue(), Utilities.encodeStringIntoRegex(separator.getValue()));
+            }
+        }
+
+        alt.sequence = generateListGrammar(ruleName, range, sepToken);
+
+        StringBuilder leftSide = new StringBuilder();
+        StringBuilder action = new StringBuilder();
+
+        // Streams of primitive types are not possible in Java. :-(
+        boolean useStream =
+                (!(innerType instanceof PrimitiveType)
+                    || ((PrimitiveType) innerType).getPrimitiveTypeConst() == PrimitiveTypeConst.STRING);
+
+        UniqueValues uniqueValuesPattern = bindingNotationPart.getPattern(UniqueValues.class);
+
+        if (useStream) {
+            leftSide.append("$").append(RETURN_VAR_NAME).append(" = ");
+            action = new StringBuilder("$ctx.").append(ruleName)
+                    .append("().stream().map(elem -> ");
+            if (innerType instanceof PrimitiveType) {
+                String conversionExpr = conversions.getConversion(innerTypeString);
+                action.append(String.format(conversionExpr, "elem.getSymbol().getText()"));
+            } else {
+                action.append("elem.").append(RETURN_VAR_NAME);
+            }
+            action.append(")");
+            if (uniqueValuesPattern != null) {
+                action.append(".collect(java.util.stream.Collectors.toCollection(LinkedHashSetImpl::new)).stream()");
+            }
+            if (type instanceof ArrayType) {
+                action.append(".toArray(" + typeString + "::new);");
+            } else if (type instanceof ListType) {
+                action.append(".collect(java.util.stream.Collectors.toList());");
+            } else if (type instanceof SetType) {
+                action.append(".collect(java.util.stream.Collectors.toSet());");
+            } else {
+                throw new GeneratorException("Unknown component type");
+            }
+        } else {
+            assert type instanceof ArrayType;
+
+            String conversionExpr = conversions.getConversion(innerTypeString);
+
+            String boxedTypeString = primitiveTypeToBoxedTypeString((PrimitiveType) innerType);
+            action.append("java.util.List<").append(boxedTypeString).append("> boxedList = ")
+                    .append("$ctx.").append(ruleName).append("().stream().map(elem -> ")
+                    .append(String.format(conversionExpr, "elem.getSymbol().getText()"))
+                    .append(")");
+            if (uniqueValuesPattern != null) {
+                action.append(".collect(java.util.stream.Collectors.toCollection(LinkedHashSetImpl::new)).stream()");
+            }
+            action.append(".collect(java.util.stream.Collectors.toList());\n");
+            action.append("$").append(RETURN_VAR_NAME).append(" = new ")
+                    .append(innerTypeString).append("[boxedList.size()];\n");
+            action.append("for (int i = 0; i < boxedList.size(); i++) {\n    ")
+                    .append("$").append(RETURN_VAR_NAME).append("[i] = boxedList.get(i);\n}");
+        }
+
+        alt.sequence.setCodeAfter(leftSide.toString() + action.toString());
+
+        p.alternatives.add(alt);
+        this.productions.put(productionName, p);
+
+        RulePart rulePart = new RulePart(productionName);
+        rulePart.setLabel(labelProvider.createLabel(productionName));
+
+        params.add("$ctx." + rulePart.getLabel() + "." + RETURN_VAR_NAME);
+        parts.add(rulePart);
+    }
+
+    private void processPrimitiveType(List<Part> parts, LabelProvider labelProvider, List<String> params, BindingNotationPart bindingNotationPart, PrimitiveType type) {
+        String typeString = typeToString(type);
+        if (!conversions.containsConversion(typeString)) {
+            throw new GeneratorException("Cannot handle type " + typeString);
+        }
+
+        String conversionExpr = conversions.getConversion(typeString).trim();
+
+        String ruleName;
+        Token tokenPattern = (Token) bindingNotationPart.getPattern(Token.class);
+        if (tokenPattern != null) {
+            ruleName = convertTokenName(tokenPattern.getName());
+        } else {
+            if (bindingNotationPart instanceof PropertyReferencePart) {
+                ruleName = convertTokenName(((PropertyReferencePart) bindingNotationPart).getProperty().getName());
+            } else {
+                ruleName = convertTokenName(((LocalVariablePart) bindingNotationPart).getName());
+            }
+        }
+
+        RulePart rulePart = new RulePart(ruleName);
+        rulePart.setLabel(labelProvider.createLabel(ruleName));
+        StringBuilder param = new StringBuilder(String.format(conversionExpr, "$ctx." + rulePart.getLabel() + ".getText()"));
+        if (bindingNotationPart instanceof PropertyReferencePart) {
+            for (Pattern pattern : bindingNotationPart.getPatterns()) { // nefunguje bindingNotationPart.getPattern(QuotedString.class)
+                if (pattern.getClass().equals(QuotedString.class)) {
+                    param.insert(0, "UnquoteStringUtil.unquote(").append(")");
+                    break;
+                }
+            }
+        }
+        params.add(param.toString());
+        parts.add(rulePart);
+    }
+
+    private void processReferenceType(List<Part> parts, LabelProvider labelProvider, List<String> params, ReferenceType referenceType) {
+        String ruleName = convertProductionName(referenceType.getConcept().getConceptName());
+
+        RulePart rulePart = new RulePart(ruleName);
+        rulePart.setLabel(labelProvider.createLabel(ruleName));
+        params.add("$ctx." + rulePart.getLabel() + "." + RETURN_VAR_NAME);
+        parts.add(rulePart);
+    }
+
+    private void processTokenPart(List<Part> parts, TokenPart part) {
+        String tokenName = part.getToken();
+        parts.add(new RulePart(convertTokenName(tokenName)));
+    }
+
+    private String getRuleName(Type type, BindingNotationPart bindingNotationPart) {
+        String ruleName ="";
+        String typeString = typeToString(type);
+
+        if (type instanceof ReferenceType) {
+            ruleName = convertProductionName(((ReferenceType) type).getConcept().getConceptName());
+        } else if (type instanceof PrimitiveType) {
+            if (!conversions.containsConversion(typeString)) {
+                throw new GeneratorException("Cannot handle type " + typeString);
+            }
+
+            Token tokenPattern = (Token) bindingNotationPart.getPattern(Token.class);
+            if (tokenPattern != null) {
+                ruleName = convertTokenName(tokenPattern.getName());
+            } else {
+                if (bindingNotationPart instanceof PropertyReferencePart) {
+                    ruleName = convertTokenName(((PropertyReferencePart) bindingNotationPart).getProperty().getName());
+                } else {
+                    ruleName = convertTokenName(((LocalVariablePart) bindingNotationPart).getName());
+                }
+            }
+        } else if (type instanceof ComponentType) {
+            Type innerType = ((ComponentType) type).getComponentType();
+            if (innerType instanceof ComponentType) {
+                throw new GeneratorException("Component types of component types are not supported.");
+            }
+            ruleName = getRuleName(innerType, bindingNotationPart);
+        } else {
+            throw new GeneratorException("Unknown type.");
+        }
+        return ruleName;
+    }
+
+    private String getProductionName(Type type, BindingNotationPart bindingNotationPart, String ruleName) {
+        String productionName ="";
+
+        if (type instanceof ReferenceType) {
+            productionName = ruleName + "_list";
+        } else if (type instanceof PrimitiveType) {
+            // Token ruleName will be in all caps and a parser rule can't begin with a capital letter
+            // so prefix it with "nt_".
+            productionName = "nt_" + ruleName + "_list";
+        } else if (type instanceof ComponentType) {
+            Type innerType = ((ComponentType) type).getComponentType();
+            if (innerType instanceof ComponentType) {
+                throw new GeneratorException("Component types of component types are not supported.");
+            }
+            productionName = getProductionName(innerType, bindingNotationPart, ruleName);
+        } else {
+            throw new GeneratorException("Unknown type.");
+        }
+
+        return productionName;
+    }
+
+    private Map<String, String> getProductionAndRuleNamesForInnerType(Type type, BindingNotationPart bindingNotationPart) {
+        String ruleName =""; // Name of the terminal/non-terminal pertaining to the list's element.
+        String productionName =""; // Name of the production rule to be created.
+
+        String innerTypeString = typeToString(type);
+
+        if (type instanceof ReferenceType) {
+            ruleName = convertProductionName(((ReferenceType) type).getConcept().getConceptName());
+            productionName = ruleName + "_list";
+        } else if (type instanceof PrimitiveType) {
+            if (!conversions.containsConversion(innerTypeString)) {
+                throw new GeneratorException("Cannot handle type " + innerTypeString);
+            }
+
+            Token tokenPattern = (Token) bindingNotationPart.getPattern(Token.class);
+            if (tokenPattern != null) {
+                ruleName = convertTokenName(tokenPattern.getName());
+            } else {
+                if (bindingNotationPart instanceof PropertyReferencePart) {
+                    ruleName = convertTokenName(((PropertyReferencePart) bindingNotationPart).getProperty().getName());
+                } else {
+                    ruleName = convertTokenName(((LocalVariablePart) bindingNotationPart).getName());
+                }
+            }
+            // Token ruleName will be in all caps and a parser rule can't begin with a capital letter
+            // so prefix it with "nt_".
+            productionName = "nt_" + ruleName + "_list";
+        } else if (type instanceof OptionalType) {
+            Type innerType = ((OptionalType) type).getComponentType();
+            return getProductionAndRuleNamesForInnerType(innerType, bindingNotationPart);
+        } else if (type instanceof ComponentType) {
+            Type innerType = ((ComponentType) type).getComponentType();
+            if (innerType instanceof ComponentType) {
+                throw new GeneratorException("Component types of component types are not supported.");
+            }
+            return getProductionAndRuleNamesForInnerType(innerType, bindingNotationPart);
+        } else {
+            throw new GeneratorException("Unknown type.");
+        }
+
+        Map<String, String> productionAndRuleNames = new HashMap<>();
+        productionAndRuleNames.put("ruleName", ruleName);
+        productionAndRuleNames.put("productionName", productionName);
+        return productionAndRuleNames;
     }
 
     // Generates a grammar rule for a list of elements, which may be lexical or parser rules.
@@ -747,8 +874,6 @@ public class ModelTranslator {
             return "java.util.List<" + typeToString(componentType.getComponentType()) + ">";
         } else if (componentType instanceof SetType) {
             return "java.util.Set<" + typeToString(componentType.getComponentType()) + ">";
-        } else if (componentType instanceof OptionalType) {
-            return "java.util.Optional<" + typeToString(componentType.getComponentType()) + ">";
         } else {
             throw new IllegalArgumentException("Unknown component type detected: '" + componentType.getClass().getCanonicalName() + "'!");
         }

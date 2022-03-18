@@ -24,13 +24,15 @@ public class Grammar implements Element {
         StringBuilder sb = new StringBuilder();
         sb.append("grammar " + this.name + ";\n\n");
         if (this.header != null && !this.header.isEmpty()) {
-            sb.append("@header {\n").append(this.header).append("\n}\n\n");
+            sb.append("@header {\n")
+                .append(Formatting.indent(this.header, 1))
+                .append("\n}\n\n");
         }
 
         if (this.implicitTokens != null && !this.implicitTokens.isEmpty()) {
-            sb.append("tokens {\n");
-            sb.append(Formatting.indent(generateImplicitTokens(), 1));
-            sb.append("}\n\n");
+            sb.append("tokens {\n")
+                .append(Formatting.indent(generateImplicitTokens(), 1))
+                .append("}\n\n");
         }
 
         sb.append(generateParserRules() + "\n")
