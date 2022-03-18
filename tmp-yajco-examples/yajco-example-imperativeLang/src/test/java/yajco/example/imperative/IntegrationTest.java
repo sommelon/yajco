@@ -26,46 +26,52 @@ public class IntegrationTest {
     @Test
     public void simpleExampleTest() throws Exception {
         executeProgram("/simpleProgram");
-//        Assert.assertEquals("10\n" +
-//                "9\n" +
-//                "8\n" +
-//                "7\n" +
-//                "6\n" +
-//                "5\n" +
-//                "4\n" +
-//                "3\n" +
-//                "2\n" +
-//                "1\n" +
-//                "0\n" +
-//                "1\n" +
-//                "2\n" +
-//                "3\n" +
-//                "4\n" +
-//                "5\n" +
-//                "6\n" +
-//                "7\n" +
-//                "8\n" +
-//                "9\n" +
-//                "10\n",
-////                "program ended\n" +
-//                outContent.toString());
+        String expected = "10\n" +
+            "9\n" +
+            "8\n" +
+            "7\n" +
+            "6\n" +
+            "5\n" +
+            "4\n" +
+            "3\n" +
+            "2\n" +
+            "1\n" +
+            "0\n" +
+            "1\n" +
+            "2\n" +
+            "3\n" +
+            "4\n" +
+            "5\n" +
+            "6\n" +
+            "7\n" +
+            "8\n" +
+            "9\n" +
+            "10\n" +
+            "program ended\n" +
+            "{a=39845888, b=0, c=20, i=11}\n"
+            ;
+        expected = expected.replaceAll("\\n|\\r\\n", System.getProperty("line.separator"));
+        Assert.assertEquals(expected, outContent.toString());
     }
 
     @Test
     public void complexExampleTest() throws Exception {
         executeProgram("/complexProgram");
-//        Assert.assertEquals("17\n" +
-//                "18\n" +
-//                "19\n" +
-//                "20\n" +
-//                "21\n" +
-//                "22\n" +
-//                "23\n" +
-//                "24\n" +
-//                "25\n" +
-//                "26\n",
-////                "program ended\n",
-//                outContent.toString());
+        String expected = "17\n" +
+            "18\n" +
+            "19\n" +
+            "20\n" +
+            "21\n" +
+            "22\n" +
+            "23\n" +
+            "24\n" +
+            "25\n" +
+            "26\n" +
+            "program ended\n" +
+            "{a=39845888, b=0, c=20}\n"
+            ;
+        expected = expected.replaceAll("\\n|\\r\\n", System.getProperty("line.separator"));
+        Assert.assertEquals(expected, outContent.toString());
     }
 
     private void executeProgram(String source) throws Exception {

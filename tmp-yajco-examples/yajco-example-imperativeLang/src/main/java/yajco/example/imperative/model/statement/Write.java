@@ -22,8 +22,7 @@ public class Write implements Statement {
     public void execute() {
         if (expression != null) {
             Machine.getInstance().write(getExpression().eval());
-        }
-        if (str != null) {
+        } else if (str != null) {
             Machine.getInstance().write(getStr());
         }
     }

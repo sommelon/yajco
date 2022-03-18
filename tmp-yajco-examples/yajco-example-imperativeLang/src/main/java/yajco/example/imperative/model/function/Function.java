@@ -11,15 +11,14 @@ public class Function {
     private final String name;
 
     private final Parameter[] parameters;
-
-
+    
     private final Block body;
 
     public Function(
             String ident,
             @Before("LPAR") @After("RPAR")
             @Separator("COMMA") Parameter[] parameters,
-            Block body) {
+            Block body) {                
         this.name = ident;
         this.parameters = parameters;
         this.body = body;
@@ -47,5 +46,4 @@ public class Function {
     public String getIdent() {
         return name;
     }
-
 }

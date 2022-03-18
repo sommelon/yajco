@@ -11,10 +11,8 @@ public class Machine {
     private static final Machine instance = new Machine();
 
     private Stack<Map<String, Long>> variableStack = new Stack<Map<String, Long>>();
-    private Stack<Map<String, String>> stringVariableStack = new Stack<Map<String, String>>();
 
     private Map<String, Long> variables;
-    private Map<String, String> stringVariables;
 
     private BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
@@ -28,32 +26,20 @@ public class Machine {
 
     public void beginFunction() {
         variables = new HashMap<String, Long>();
-        stringVariables = new HashMap<String, String>();
         variableStack.push(variables);
-        stringVariableStack.push(stringVariables);
     }
 
     public void endFunction() {
         variableStack.pop();
-        stringVariableStack.pop();
         variables = variableStack.peek();
-        stringVariables = stringVariableStack.peek();
     }
 
     public long getValue(String ident) {
         return variables.get(ident);
     }
 
-    public String getStringValue(String ident) {
-        return stringVariables.get(ident);
-    }
-
     public void setValue(String ident, long value) {
         variables.put(ident, value);
-    }
-
-    public void setValue(String ident, String value) {
-        stringVariables.put(ident, value);
     }
 
     public void write(long value) {
@@ -75,6 +61,6 @@ public class Machine {
 
     @Override
     public String toString() {
-        return variables.toString() +  stringVariables.toString();
+        return variables.toString();
     }
 }
